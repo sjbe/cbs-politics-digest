@@ -19,11 +19,23 @@ app = Flask(__name__)
 _cache = {"ts": 0.0, "entries": []}
 
 
+NAME_PARTICLES = {
+    "van", "von", "de", "del", "della", "di", "da", "la", "le", "der",
+    "den", "ten", "ter", "du", "dos", "das", "do", "st", "st.", "saint",
+    "mc", "mac", "el", "al", "bin", "ibn",
+}
+
+
 def last_name(full_name: str) -> str:
     name = re.sub(r"\s+", " ", full_name).strip()
     name = re.sub(r",.*$", "", name)  # drop ", CBS News" etc.
     parts = name.split(" ")
-    return parts[-1] if parts else name
+    if not parts:
+        return name
+    i = len(parts) - 1
+    while i > 0 and parts[i - 1].lower().rstrip(".") in NAME_PARTICLES:
+        i -= 1
+    return " ".join(parts[i:])
 
 
 def extract_authors(soup: BeautifulSoup) -> list[str]:
