@@ -158,6 +158,8 @@ def load_entries() -> list[dict]:
         if not is_article_url(link):
             continue
         title = unescape(e.get("title", "")).strip()
+        if "transcript" in title.lower():
+            continue
         summary = unescape(re.sub(r"<[^>]+>", "", e.get("summary", ""))).strip()
         items.append((link, title, summary))
         if len(items) >= MAX_ENTRIES:
