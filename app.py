@@ -85,6 +85,15 @@ def extract_authors(soup: BeautifulSoup) -> list[str]:
     return names
 
 
+DATELINE_RE = re.compile(
+    r"^[A-Z][A-Za-z\.\-']*(?:[ \t]+[A-Z][A-Za-z\.\-']*){0,3}(?:,\s*[A-Z][A-Za-z\.\-' ]+)?\s+[—–-]+\s+"
+)
+
+
+def strip_dateline(text: str) -> str:
+    return DATELINE_RE.sub("", text, count=1)
+
+
 def extract_paragraphs(soup: BeautifulSoup, n: int = 3) -> list[str]:
     body = soup.select_one(".content__body")
     if not body:
@@ -101,6 +110,8 @@ def extract_paragraphs(soup: BeautifulSoup, n: int = 3) -> list[str]:
         paragraphs.append(text)
         if len(paragraphs) >= n:
             break
+    if paragraphs:
+        paragraphs[0] = strip_dateline(paragraphs[0])
     return paragraphs
 
 
