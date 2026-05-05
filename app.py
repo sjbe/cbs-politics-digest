@@ -177,6 +177,9 @@ def extract_paragraphs(soup: BeautifulSoup, n: int = 3) -> list[str]:
         if p.find_parent(class_=re.compile(r"content__body--footer")):
             continue
         text = p.get_text(" ", strip=True)
+        text = re.sub(r"\s+([,\.;:!\?\)])", r"\1", text)
+        text = re.sub(r"(\()\s+", r"\1", text)
+        text = re.sub(r"\s{2,}", " ", text)
         if not text:
             continue
         if re.match(r"^[A-Z][a-zA-Z\-' ]+ contributed to this report", text):
