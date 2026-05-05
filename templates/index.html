@@ -129,6 +129,9 @@
       </div>
     </div>
     <div class="header-actions">
+      <label style="font-size:10pt;display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;">
+        <input type="checkbox" id="select-all"> Select all
+      </label>
       <button type="button" class="secondary" id="copy-selected">Copy selected (0)</button>
       <form class="refresh-form" action="{{ url_for('refresh') }}" method="post">
         <button type="submit">Refresh</button>
@@ -165,6 +168,7 @@
     (function () {
       const articles = Array.from(document.querySelectorAll('article'));
       const copySelectedBtn = document.getElementById('copy-selected');
+      const selectAllBox = document.getElementById('select-all');
       const toast = document.getElementById('toast');
 
       function escapeHtml(s) {
@@ -246,6 +250,18 @@
       function updateSelectedCount() {
         const n = articles.filter(a => a.querySelector('.select-box').checked).length;
         copySelectedBtn.textContent = 'Copy selected (' + n + ')';
+        if (selectAllBox) {
+          selectAllBox.checked = n === articles.length && n > 0;
+          selectAllBox.indeterminate = n > 0 && n < articles.length;
+        }
+      }
+
+      if (selectAllBox) {
+        selectAllBox.addEventListener('change', () => {
+          const checked = selectAllBox.checked;
+          articles.forEach(a => { a.querySelector('.select-box').checked = checked; });
+          updateSelectedCount();
+        });
       }
 
       articles.forEach(article => {
