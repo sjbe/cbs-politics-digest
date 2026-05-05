@@ -56,8 +56,8 @@
       padding: 2px 8px;
       font-size: 9pt;
       font-weight: normal;
-      margin-left: 0.5rem;
-      vertical-align: middle;
+      margin-bottom: 0.35rem;
+      display: inline-block;
     }
     button.copy-one:hover { background: #0a4fb3; color: #fff; }
     button.copy-one.copied { background: #2a8c3a; color: #fff; border-color: #2a8c3a; }
@@ -136,7 +136,8 @@
         data-authors="{{ entry.authors_tag }}">
         <input type="checkbox" class="select-box" aria-label="Select for copy">
         <div class="entry">
-          <a class="headline" href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.headline }}</a><button type="button" class="copy-one">Copy</button>
+          <button type="button" class="copy-one">Copy entry</button><br>
+          <a class="headline" href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.headline }}</a>
           {% if entry.paragraphs %}
             <p class="body">{{ entry.paragraphs | join(' ') }}<span class="authors">{{ entry.authors_tag }}</span></p>
           {% endif %}
@@ -245,7 +246,7 @@
             btn.textContent = 'Copied';
             btn.classList.add('copied');
             setTimeout(() => {
-              btn.textContent = 'Copy';
+              btn.textContent = 'Copy entry';
               btn.classList.remove('copied');
             }, 1400);
           } else {
