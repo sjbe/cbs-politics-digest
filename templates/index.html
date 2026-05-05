@@ -21,6 +21,10 @@
       justify-content: space-between;
       gap: 1rem;
       flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 10;
     }
     header h1 {
       font-size: 11pt;
@@ -28,7 +32,7 @@
       font-weight: bold;
     }
     .meta { color: #666; font-size: 10pt; }
-    form { margin: 0; }
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; }
     button {
       background: #cc0000;
       color: white;
@@ -41,6 +45,23 @@
       font-weight: bold;
     }
     button:hover { background: #a30000; }
+    button.secondary {
+      background: #444;
+    }
+    button.secondary:hover { background: #222; }
+    button.copy-one {
+      background: transparent;
+      color: #0a4fb3;
+      border: 1px solid #0a4fb3;
+      padding: 2px 8px;
+      font-size: 9pt;
+      font-weight: normal;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    button.copy-one:hover { background: #0a4fb3; color: #fff; }
+    button.copy-one.copied { background: #2a8c3a; color: #fff; border-color: #2a8c3a; }
+    form.refresh-form { margin: 0; }
     main {
       max-width: 760px;
       margin: 0 auto;
@@ -48,22 +69,47 @@
     }
     article {
       margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
     }
+    .select-box {
+      margin-top: 4px;
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .entry { flex: 1 1 auto; min-width: 0; }
     .headline {
-      display: block;
       font-weight: bold;
       color: #0a4fb3;
       text-decoration: underline;
-      margin-bottom: 0.35rem;
     }
     .headline:visited { color: #0a4fb3; }
     .body {
       font-weight: normal;
-      margin: 0;
+      margin: 0.35rem 0 0;
     }
     .authors {
       font-style: normal;
     }
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #222;
+      color: #fff;
+      padding: 0.6rem 1rem;
+      border-radius: 4px;
+      font-size: 10pt;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      z-index: 20;
+    }
+    #toast.show { opacity: 1; }
   </style>
 </head>
 <body>
@@ -74,21 +120,152 @@
         {% if age_seconds < 60 %}Updated just now{% else %}Updated {{ (age_seconds // 60) }} min ago{% endif %}
       </div>
     </div>
-    <form action="{{ url_for('refresh') }}" method="post">
-      <button type="submit">Refresh</button>
-    </form>
+    <div class="header-actions">
+      <button type="button" class="secondary" id="copy-selected">Copy selected (0)</button>
+      <form class="refresh-form" action="{{ url_for('refresh') }}" method="post">
+        <button type="submit">Refresh</button>
+      </form>
+    </div>
   </header>
   <main>
     {% for entry in entries %}
-      <article>
-        <a class="headline" href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.headline }}</a>
-        {% if entry.paragraphs %}
-          <p class="body">{{ entry.paragraphs | join(' ') }}<span class="authors">{{ entry.authors_tag }}</span></p>
-        {% endif %}
+      <article
+        data-headline="{{ entry.headline }}"
+        data-url="{{ entry.url }}"
+        data-body="{{ entry.paragraphs | join(' ') }}"
+        data-authors="{{ entry.authors_tag }}">
+        <input type="checkbox" class="select-box" aria-label="Select for copy">
+        <div class="entry">
+          <a class="headline" href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.headline }}</a><button type="button" class="copy-one">Copy</button>
+          {% if entry.paragraphs %}
+            <p class="body">{{ entry.paragraphs | join(' ') }}<span class="authors">{{ entry.authors_tag }}</span></p>
+          {% endif %}
+        </div>
       </article>
     {% else %}
       <p>No entries available.</p>
     {% endfor %}
   </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script>
+    (function () {
+      const articles = Array.from(document.querySelectorAll('article'));
+      const copySelectedBtn = document.getElementById('copy-selected');
+      const toast = document.getElementById('toast');
+
+      function escapeHtml(s) {
+        return s.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+      }
+
+      function buildEntryHtml(article) {
+        const headline = article.dataset.headline || '';
+        const url = article.dataset.url || '';
+        const body = article.dataset.body || '';
+        const authors = article.dataset.authors || '';
+        return (
+          '<div style="font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#111;margin:0 0 12pt 0;">' +
+            '<a href="' + escapeHtml(url) + '" ' +
+              'style="font-family:Arial,Helvetica,sans-serif;font-size:11pt;font-weight:bold;color:#0a4fb3;text-decoration:underline;">' +
+              escapeHtml(headline) +
+            '</a><br>' +
+            '<span style="font-family:Arial,Helvetica,sans-serif;font-size:11pt;font-weight:normal;color:#111;">' +
+              escapeHtml(body) + escapeHtml(authors) +
+            '</span>' +
+          '</div>'
+        );
+      }
+
+      function buildEntryText(article) {
+        const headline = article.dataset.headline || '';
+        const url = article.dataset.url || '';
+        const body = article.dataset.body || '';
+        const authors = article.dataset.authors || '';
+        return headline + '\n' + url + '\n' + body + authors + '\n';
+      }
+
+      async function copyHtml(html, text) {
+        const wrapped =
+          '<html><body>' + html + '</body></html>';
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            const item = new ClipboardItem({
+              'text/html': new Blob([wrapped], { type: 'text/html' }),
+              'text/plain': new Blob([text], { type: 'text/plain' }),
+            });
+            await navigator.clipboard.write([item]);
+            return true;
+          }
+        } catch (e) {
+          // fall through
+        }
+        // Fallback: contenteditable + execCommand
+        const div = document.createElement('div');
+        div.contentEditable = 'true';
+        div.style.position = 'fixed';
+        div.style.left = '-9999px';
+        div.innerHTML = wrapped;
+        document.body.appendChild(div);
+        const range = document.createRange();
+        range.selectNodeContents(div);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        sel.removeAllRanges();
+        document.body.removeChild(div);
+        return ok;
+      }
+
+      let toastTimer = null;
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+      }
+
+      function updateSelectedCount() {
+        const n = articles.filter(a => a.querySelector('.select-box').checked).length;
+        copySelectedBtn.textContent = 'Copy selected (' + n + ')';
+      }
+
+      articles.forEach(article => {
+        const cb = article.querySelector('.select-box');
+        cb.addEventListener('change', updateSelectedCount);
+
+        const btn = article.querySelector('.copy-one');
+        btn.addEventListener('click', async () => {
+          const ok = await copyHtml(buildEntryHtml(article), buildEntryText(article));
+          if (ok) {
+            btn.textContent = 'Copied';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'Copy';
+              btn.classList.remove('copied');
+            }, 1400);
+          } else {
+            showToast('Copy failed');
+          }
+        });
+      });
+
+      copySelectedBtn.addEventListener('click', async () => {
+        const selected = articles.filter(a => a.querySelector('.select-box').checked);
+        if (selected.length === 0) {
+          showToast('Nothing selected');
+          return;
+        }
+        const html = selected.map(buildEntryHtml).join('');
+        const text = selected.map(buildEntryText).join('\n');
+        const ok = await copyHtml(html, text);
+        showToast(ok ? 'Copied ' + selected.length + ' ' + (selected.length === 1 ? 'entry' : 'entries') : 'Copy failed');
+      });
+    })();
+  </script>
 </body>
 </html>
