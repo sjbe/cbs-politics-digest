@@ -258,7 +258,15 @@ def fetch_index_links(url: str) -> list[str]:
         resp.raise_for_status()
     except requests.RequestException:
         return []
-    return re.findall(r'href="(https://www\.cbsnews\.com/news/[a-z0-9\-]+/)"', resp.text)
+    html = resp.text
+    m = re.search(r'<section[^>]*class="[^"]*list-river[^"]*"[^>]*>', html)
+    if not m:
+        return []
+    chunk = html[m.start():]
+    next_section = re.search(r'<section[^>]*class="[^"]*component[^"]*"', chunk[10:])
+    end = next_section.start() + 10 if next_section else len(chunk)
+    section = chunk[:end]
+    return re.findall(r'href="(https://www\.cbsnews\.com/news/[a-z0-9\-]+/)"', section)
 
 
 def load_entries() -> list[dict]:
