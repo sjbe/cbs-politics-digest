@@ -15,6 +15,8 @@ ET = ZoneInfo("America/New_York")
 
 RSS_URL = "https://www.cbsnews.com/latest/rss/politics"
 MAX_ENTRIES = 20
+RSS_POOL_SIZE = 50
+MAX_AGE_SECONDS = 48 * 3600
 CACHE_TTL_SECONDS = 300
 REQUEST_TIMEOUT = 10
 USER_AGENT = "Mozilla/5.0 (compatible; CBSPoliticsDigest/1.0)"
@@ -199,6 +201,7 @@ def fetch_article(url: str, headline: str, summary: str) -> dict:
             "authors_tag": "",
             "published_str": "",
             "updated_str": "",
+            "published": None,
         }
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -229,6 +232,7 @@ def fetch_article(url: str, headline: str, summary: str) -> dict:
         "authors_tag": authors_tag,
         "published_str": published_str,
         "updated_str": updated_str,
+        "published": published,
     }
 
 
@@ -248,14 +252,24 @@ def load_entries() -> list[dict]:
             continue
         summary = unescape(re.sub(r"<[^>]+>", "", e.get("summary", ""))).strip()
         items.append((link, title, summary))
-        if len(items) >= MAX_ENTRIES:
+        if len(items) >= RSS_POOL_SIZE:
             break
 
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = list(
             ex.map(lambda t: fetch_article(t[0], t[1], t[2]), items)
         )
-    return results
+
+    now = datetime.now(timezone.utc)
+    fresh = []
+    for r in results:
+        pub = r.get("published")
+        if pub and (now - pub).total_seconds() > MAX_AGE_SECONDS:
+            continue
+        fresh.append(r)
+        if len(fresh) >= MAX_ENTRIES:
+            break
+    return fresh
 
 
 def get_entries(force: bool = False) -> list[dict]:
