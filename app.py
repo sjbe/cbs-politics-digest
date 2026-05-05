@@ -267,7 +267,7 @@ def fetch_index_links(url: str) -> list[str]:
     end = next_section.start() + 10 if next_section else len(chunk)
     section = chunk[:end]
     found = re.findall(
-        r'href="https://www\.cbsnews\.com/(?:[a-z]+/)?news/([a-z0-9\-]+/)"',
+        r'href="https://www\.cbsnews\.com/(?:[a-z\-]+/)?news/([a-z0-9\-]+/)"',
         section,
     )
     return [f"https://www.cbsnews.com/news/{slug}" for slug in found]
