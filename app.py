@@ -57,10 +57,20 @@ def parse_iso(dt_str: str) -> datetime | None:
     return dt
 
 
-def format_et(dt: datetime) -> str:
+def format_time(dt: datetime, with_zone: bool = False) -> str:
     local = dt.astimezone(ET)
     h = local.strftime("%I").lstrip("0") or "12"
-    return f"{local.strftime('%b %-d')}, {h}:{local.strftime('%M %p')} ET"
+    m = local.strftime("%M")
+    ampm = local.strftime("%p").lower()
+    ampm = f"{ampm[0]}.{ampm[1]}."
+    s = f"{h}:{m} {ampm}"
+    if with_zone:
+        s += " ET"
+    return s
+
+
+def format_date(dt: datetime) -> str:
+    return dt.astimezone(ET).strftime("%b %-d")
 
 
 def extract_dates(soup: BeautifulSoup) -> tuple[datetime | None, datetime | None]:
@@ -200,10 +210,17 @@ def fetch_article(url: str, headline: str, summary: str) -> dict:
     authors_tag = f" ({', '.join(last_names)})" if last_names else ""
 
     published, modified = extract_dates(soup)
-    published_str = f"Published {format_et(published)}" if published else ""
+    today = datetime.now(ET).date()
+    published_str = ""
+    if published:
+        pub_same = published.astimezone(ET).date() == today
+        t = format_time(published, with_zone=True)
+        published_str = f"Published {t}" if pub_same else f"Published {format_date(published)}, {t}"
     updated_str = ""
     if published and modified and (modified - published).total_seconds() > 120:
-        updated_str = f"Updated {format_et(modified)}"
+        mod_same = modified.astimezone(ET).date() == today
+        t = format_time(modified)
+        updated_str = f"Updated {t}" if mod_same else f"Updated {format_date(modified)}, {t}"
 
     return {
         "headline": headline,

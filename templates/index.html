@@ -147,7 +147,7 @@
           <div class="entry-meta">
             <button type="button" class="copy-one">Copy entry</button>
             <span class="timestamps">
-              {{ entry.published_str }}{% if entry.updated_str %} · {{ entry.updated_str }}{% endif %}
+              {{ entry.published_str }}{% if entry.updated_str %}; {{ entry.updated_str }}{% endif %}
             </span>
           </div>
           <a class="headline" href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.headline }}</a>
