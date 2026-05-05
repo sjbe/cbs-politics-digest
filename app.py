@@ -14,8 +14,12 @@ from flask import Flask, render_template
 ET = ZoneInfo("America/New_York")
 
 RSS_URL = "https://www.cbsnews.com/latest/rss/politics"
+POLITICS_INDEX_URLS = [
+    "https://www.cbsnews.com/politics/",
+    "https://www.cbsnews.com/politics/2/",
+]
 MAX_ENTRIES = 20
-RSS_POOL_SIZE = 50
+RSS_POOL_SIZE = 150
 MAX_AGE_SECONDS = 48 * 3600
 CACHE_TTL_SECONDS = 300
 REQUEST_TIMEOUT = 10
@@ -205,6 +209,14 @@ def fetch_article(url: str, headline: str, summary: str) -> dict:
         }
 
     soup = BeautifulSoup(resp.text, "html.parser")
+    if not headline:
+        og = soup.find("meta", attrs={"property": "og:title"})
+        if og and og.get("content"):
+            headline = unescape(og["content"]).strip()
+        else:
+            h1 = soup.find("h1")
+            if h1:
+                headline = h1.get_text(" ", strip=True)
     paragraphs = extract_paragraphs(soup, 3)
     if not paragraphs and summary:
         paragraphs = [summary]
@@ -240,20 +252,38 @@ def is_article_url(url: str) -> bool:
     return "/news/" in url
 
 
+def fetch_index_links(url: str) -> list[str]:
+    try:
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT})
+        resp.raise_for_status()
+    except requests.RequestException:
+        return []
+    return re.findall(r'href="(https://www\.cbsnews\.com/news/[a-z0-9\-]+/)"', resp.text)
+
+
 def load_entries() -> list[dict]:
     feed = feedparser.parse(RSS_URL)
-    items = []
+    items: list[tuple[str, str, str]] = []
+    seen_urls: set[str] = set()
     for e in feed.entries:
         link = e.get("link", "")
-        if not is_article_url(link):
+        if not is_article_url(link) or link in seen_urls:
             continue
         title = unescape(e.get("title", "")).strip()
         if "transcript" in title.lower():
             continue
         summary = unescape(re.sub(r"<[^>]+>", "", e.get("summary", ""))).strip()
         items.append((link, title, summary))
+        seen_urls.add(link)
         if len(items) >= RSS_POOL_SIZE:
             break
+
+    for index_url in POLITICS_INDEX_URLS:
+        for link in fetch_index_links(index_url):
+            if link in seen_urls:
+                continue
+            items.append((link, "", ""))
+            seen_urls.add(link)
 
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = list(
@@ -266,10 +296,17 @@ def load_entries() -> list[dict]:
         pub = r.get("published")
         if pub and (now - pub).total_seconds() > MAX_AGE_SECONDS:
             continue
+        if "transcript" in r.get("headline", "").lower():
+            continue
+        if not r.get("headline"):
+            continue
         fresh.append(r)
-        if len(fresh) >= MAX_ENTRIES:
-            break
-    return fresh
+
+    fresh.sort(
+        key=lambda r: r["published"] or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    return fresh[:MAX_ENTRIES]
 
 
 def get_entries(force: bool = False) -> list[dict]:
