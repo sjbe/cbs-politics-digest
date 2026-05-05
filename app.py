@@ -2,12 +2,16 @@ import json
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from html import unescape
+from zoneinfo import ZoneInfo
 
 import feedparser
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, render_template
+
+ET = ZoneInfo("America/New_York")
 
 RSS_URL = "https://www.cbsnews.com/latest/rss/politics"
 MAX_ENTRIES = 20
@@ -36,6 +40,48 @@ def last_name(full_name: str) -> str:
     while i > 0 and parts[i - 1].lower().rstrip(".") in NAME_PARTICLES:
         i -= 1
     return " ".join(parts[i:])
+
+
+def parse_iso(dt_str: str) -> datetime | None:
+    if not dt_str:
+        return None
+    s = dt_str.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def format_et(dt: datetime) -> str:
+    local = dt.astimezone(ET)
+    h = local.strftime("%I").lstrip("0") or "12"
+    return f"{local.strftime('%b %-d')}, {h}:{local.strftime('%M %p')} ET"
+
+
+def extract_dates(soup: BeautifulSoup) -> tuple[datetime | None, datetime | None]:
+    published = None
+    modified = None
+    for tag in soup.find_all("script", {"type": "application/ld+json"}):
+        try:
+            data = json.loads(tag.string or "")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            p = parse_iso(item.get("datePublished", ""))
+            m = parse_iso(item.get("dateModified", ""))
+            if p and not published:
+                published = p
+            if m and not modified:
+                modified = m
+    return published, modified
 
 
 def extract_authors(soup: BeautifulSoup) -> list[str]:
@@ -141,6 +187,8 @@ def fetch_article(url: str, headline: str, summary: str) -> dict:
             "url": url,
             "paragraphs": [summary] if summary else [],
             "authors_tag": "",
+            "published_str": "",
+            "updated_str": "",
         }
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -150,11 +198,20 @@ def fetch_article(url: str, headline: str, summary: str) -> dict:
     authors = extract_authors(soup)
     last_names = [last_name(a) for a in authors if last_name(a)]
     authors_tag = f" ({', '.join(last_names)})" if last_names else ""
+
+    published, modified = extract_dates(soup)
+    published_str = f"Published {format_et(published)}" if published else ""
+    updated_str = ""
+    if published and modified and (modified - published).total_seconds() > 120:
+        updated_str = f"Updated {format_et(modified)}"
+
     return {
         "headline": headline,
         "url": url,
         "paragraphs": paragraphs,
         "authors_tag": authors_tag,
+        "published_str": published_str,
+        "updated_str": updated_str,
     }
 
 

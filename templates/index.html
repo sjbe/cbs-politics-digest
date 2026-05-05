@@ -56,9 +56,17 @@
       padding: 2px 8px;
       font-size: 9pt;
       font-weight: normal;
-      margin-bottom: 0.35rem;
       display: inline-block;
+      vertical-align: middle;
     }
+    .timestamps {
+      display: inline-block;
+      margin-left: 0.6rem;
+      font-size: 9pt;
+      color: #666;
+      vertical-align: middle;
+    }
+    .entry-meta { margin-bottom: 0.35rem; }
     button.copy-one:hover { background: #0a4fb3; color: #fff; }
     button.copy-one.copied { background: #2a8c3a; color: #fff; border-color: #2a8c3a; }
     form.refresh-form { margin: 0; }
@@ -136,7 +144,12 @@
         data-authors="{{ entry.authors_tag }}">
         <input type="checkbox" class="select-box" aria-label="Select for copy">
         <div class="entry">
-          <button type="button" class="copy-one">Copy entry</button><br>
+          <div class="entry-meta">
+            <button type="button" class="copy-one">Copy entry</button>
+            <span class="timestamps">
+              {{ entry.published_str }}{% if entry.updated_str %} · {{ entry.updated_str }}{% endif %}
+            </span>
+          </div>
           <a class="headline" href="{{ entry.url }}" target="_blank" rel="noopener">{{ entry.headline }}</a>
           {% if entry.paragraphs %}
             <p class="body">{{ entry.paragraphs | join(' ') }}<span class="authors">{{ entry.authors_tag }}</span></p>
